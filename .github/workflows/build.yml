@@ -8,10 +8,12 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # actions/checkout refuses any path outside $GITHUB_WORKSPACE, so we can't
-    # force an absolute root. Instead, nest both checkouts as siblings under a
-    # subfolder of the workspace - that keeps '../../opensource/zennotes'
-    # (resolved from zennotesandroid/src) pointing at the right place.
+    # actions/checkout refuses any path outside $GITHUB_WORKSPACE.
+    # The Vite alias '../../opensource/zennotes' is resolved relative to
+    # vite.config.ts at the zennotesandroid repo ROOT (confirmed from build
+    # logs), not from src/. So: zennotesandroid lives at build/zennotesandroid,
+    # two levels up from that is $GITHUB_WORKSPACE itself, and opensource/zennotes
+    # must sit directly there.
     steps:
       - name: Checkout zennotesandroid
         uses: actions/checkout@v4
@@ -22,18 +24,32 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: ZenNotes/zennotes
-          path: build/opensource/zennotes
+          path: opensource/zennotes
           # If this repo is ever made private, uncomment and add a PAT secret:
           # token: ${{ secrets.ZENNOTES_MONOREPO_TOKEN }}
 
       - name: Debug - show resolved layout
         run: |
-          echo "--- workspace/build ---"
-          ls -la "$GITHUB_WORKSPACE/build"
+          echo "--- workspace root ---"
+          ls -la "$GITHUB_WORKSPACE"
           echo "--- zennotesandroid/src ---"
           ls -la "$GITHUB_WORKSPACE/build/zennotesandroid/src" || true
+          echo "--- opensource/zennotes (top level) ---"
+          ls -la "$GITHUB_WORKSPACE/opensource/zennotes" || true
+          echo "--- opensource/zennotes/packages ---"
+          ls -la "$GITHUB_WORKSPACE/opensource/zennotes/packages" || true
           echo "--- opensource/zennotes/packages/app-core/src ---"
-          ls -la "$GITHUB_WORKSPACE/build/opensource/zennotes/packages/app-core/src" || true
+          ls -la "$GITHUB_WORKSPACE/opensource/zennotes/packages/app-core/src" || true
+          echo "--- opensource/zennotes/packages/shared-domain/src ---"
+          ls -la "$GITHUB_WORKSPACE/opensource/zennotes/packages/shared-domain/src" || true
+          echo "--- opensource/zennotes/packages/bridge-contract/src ---"
+          ls -la "$GITHUB_WORKSPACE/opensource/zennotes/packages/bridge-contract/src" || true
+          echo "--- opensource/zennotes/apps/desktop/src/main (for @desktop-main alias) ---"
+          ls -la "$GITHUB_WORKSPACE/opensource/zennotes/apps/desktop/src/main" || true
+          echo "--- opensource/zennotes root package.json (for monorepo layout sanity) ---"
+          cat "$GITHUB_WORKSPACE/opensource/zennotes/package.json" || true
+          echo "--- opensource/zennotes/packages/app-core/package.json ---"
+          cat "$GITHUB_WORKSPACE/opensource/zennotes/packages/app-core/package.json" || true
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
