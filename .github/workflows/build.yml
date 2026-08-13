@@ -8,23 +8,33 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Force an unambiguous root so the '../../opensource/zennotes' Vite alias
+    # (resolved from zennotesandroid/src) lines up exactly: two levels up from
+    # zennotesandroid/ must land on ROOT, and opensource/zennotes must live there.
+    env:
+      ROOT: /home/runner/zn-build
     steps:
-      # This repo (the Capacitor shell)
       - name: Checkout zennotesandroid
         uses: actions/checkout@v4
         with:
-          path: zennotesandroid
+          path: ${{ env.ROOT }}/zennotesandroid
 
-      # The README says this repo reads ../../opensource/zennotes read-only.
-      # Adjust org/repo name and path below to match the actual monorepo location.
-      # If that repo is private, add a checkout 'token' with a PAT that has access to it
-      # (store it as a repo secret, e.g. secrets.ZENNOTES_MONOREPO_TOKEN).
       - name: Checkout zennotes monorepo (sibling dependency)
         uses: actions/checkout@v4
         with:
           repository: ZenNotes/zennotes
-          path: opensource/zennotes
+          path: ${{ env.ROOT }}/opensource/zennotes
+          # If this repo is ever made private, uncomment and add a PAT secret:
           # token: ${{ secrets.ZENNOTES_MONOREPO_TOKEN }}
+
+      - name: Debug - show resolved layout
+        run: |
+          echo "--- ROOT ---"
+          ls -la "$ROOT"
+          echo "--- zennotesandroid/src ---"
+          ls -la "$ROOT/zennotesandroid/src" || true
+          echo "--- opensource/zennotes/packages/app-core/src ---"
+          ls -la "$ROOT/opensource/zennotes/packages/app-core/src" || true
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
@@ -35,6 +45,34 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: ${{ env.ROOT }}/zennotesandroid/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ${{ env.ROOT }}/zennotesandroid
+        run: npm install
+
+      - name: Vite build + Capacitor sync
+        working-directory: ${{ env.ROOT }}/zennotesandroid
+        run: npm run sync
+
+      - name: Make gradlew executable
+        working-directory: ${{ env.ROOT }}/zennotesandroid/android
+        run: chmod +x gradlew
+
+      - name: Build debug APK
+        working-directory: ${{ env.ROOT }}/zennotesandroid/android
+        run: ./gradlew assembleDebug --stacktrace
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: zennotes-debug-apk
+          path: ${{ env.ROOT }}/zennotesandroid/android/app/build/outputs/apk/debug/app-debug.apk
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
