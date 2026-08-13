@@ -1,0 +1,65 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      # This repo (the Capacitor shell)
+      - name: Checkout zennotesandroid
+        uses: actions/checkout@v4
+        with:
+          path: zennotesandroid
+
+      # The README says this repo reads ../../opensource/zennotes read-only.
+      # Adjust org/repo name and path below to match the actual monorepo location.
+      # If that repo is private, add a checkout 'token' with a PAT that has access to it
+      # (store it as a repo secret, e.g. secrets.ZENNOTES_MONOREPO_TOKEN).
+      - name: Checkout zennotes monorepo (sibling dependency)
+        uses: actions/checkout@v4
+        with:
+          repository: ZenNotes/zennotes
+          path: opensource/zennotes
+          # token: ${{ secrets.ZENNOTES_MONOREPO_TOKEN }}
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: zennotesandroid/package-lock.json
+
+      - name: Install dependencies
+        working-directory: zennotesandroid
+        run: npm install
+
+      - name: Vite build + Capacitor sync
+        working-directory: zennotesandroid
+        run: npm run sync
+
+      - name: Make gradlew executable
+        working-directory: zennotesandroid/android
+        run: chmod +x gradlew
+
+      - name: Build debug APK
+        working-directory: zennotesandroid/android
+        run: ./gradlew assembleDebug --stacktrace
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: zennotes-debug-apk
+          path: zennotesandroid/android/app/build/outputs/apk/debug/app-debug.apk
